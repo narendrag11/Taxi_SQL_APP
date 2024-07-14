@@ -1,5 +1,5 @@
 import sqlite3
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request, abort, render_template_string
 
 app = Flask(__name__)
 
@@ -14,7 +14,9 @@ def get_db_connection():
 def bad_request(error):
     return jsonify({'error': str(error.description)}), 400
 
-
+@app.route('/')
+def index():
+   return render_template_string("<h1>Welcome to Taxi Trip Website</h1>")
 
 @app.route('/api/tables', methods=['GET'])
 def get_table_list():
@@ -46,15 +48,74 @@ def get_table_data(table_name):
 
     return jsonify([dict(row) for row in rows])
 
+# POST
+@app.route('/data/<table_name>', methods=['POST'])
+def insert_data(table_name):
+  print('---------------- Im called -------------')
+  # Get data from the request body
+  data = request.get_json()
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  # Extract relevant data from the request (modify as needed)
+  column_names = ','.join(data.keys())
+  placeholders = ','.join(['?' for _ in data.values()])
 
-# @app.route('/api/data/<table_name>',method=['POST'])
-# def add_data(table_name):
-#     if table_name=='feb_yellow_tripdata':
-#         trip_data = request.get_json()
-#         # mandatory 
-#         required_keys = ["VendorID", "tpep_pickup_datetime", "tpep_dropoff_datetime"]
-#         if not all(key in trip_data for key in required_keys):
-#             return jsonify({"error": "Missing required fields"}), 400
+  # Construct the INSERT INTO statement
+  insert_query = f"INSERT INTO {table_name} ({column_names}) VALUES ({placeholders})"
+
+  try:
+    # Execute the query with data
+    
+    cursor.execute(insert_query, data.values())
+    cursor.commit()
+    print('--------my work done')
+    return jsonify({'message': 'Data inserted successfully'}), 201  # Created status code
+  except Exception as e:
+    # Handle errors (e.g., database errors, validation errors)
+    return jsonify({'message': f'Error inserting data: {str(e)}'}), 400  # Bad Request status code
+
+
+
+# All tables dont have id's
+@app.route('/data/<table_name>/<int:id>', methods=['PUT'])
+def update_data(table_name,id):
+  # Get data from the request body
+  data = request.get_json()
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  # Extract relevant data and update statement parts (modify as needed)
+  update_data = []
+  for key, value in data.items():
+    update_data.append(f"{key} = ?")
+
+  update_clause = ','.join(update_data)
+  update_query = f"UPDATE {table_name} SET {update_clause} WHERE id = {id}"
+
+  try:
+    # Execute the update query with data
+    cursor.execute(update_query, [*data.values(), id])
+    cursor.commit()
+    return jsonify({'message': 'Data updated successfully'}), 200  # OK status code
+  except Exception as e:
+    # Handle errors (e.g., database errors, validation errors)
+    return jsonify({'message': f'Error updating data: {str(e)}'}), 400  # Bad Request status code
+
+
+@app.route('/data/<table_name>/<int:id>', methods=['DELETE'])
+def delete_data(table_name,id):
+  # Construct the DELETE query with the ID
+  delete_query = f"DELETE FROM feb_yellow_tripdata WHERE id = {id}"
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  try:
+    # Execute the delete query
+    cursor.execute(delete_query)
+    cursor.commit()
+    return jsonify({'message': 'Data deleted successfully'}), 204  # No Content status code
+  except Exception as e:
+    # Handle errors (e.g., database errors)
+    return jsonify({'message': f'Error deleting data: {str(e)}'}), 400  # Bad Request status code
+
 
 if __name__ == '__main__':
     app.run(debug=True,port=5010)
